@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.db import FIXTURES_DIR, connect
+from app.db import connect, fixtures_dir
 
 
 SCHEMA = """
@@ -79,6 +79,81 @@ CREATE TABLE IF NOT EXISTS reconcile_reports (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY(domain_id) REFERENCES domains(id)
 );
+
+-- 差异清单：每次对账报告物化一份不可变快照，按报告 id 关联。
+CREATE TABLE IF NOT EXISTS reconcile_diff_lists (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_id INTEGER NOT NULL UNIQUE,
+  domain_id INTEGER NOT NULL,
+  key_count INTEGER NOT NULL DEFAULT 0,
+  detail_only_count INTEGER NOT NULL DEFAULT 0,
+  summary_only_count INTEGER NOT NULL DEFAULT 0,
+  count_mismatch_count INTEGER NOT NULL DEFAULT 0,
+  amount_drift_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY(report_id) REFERENCES reconcile_reports(id),
+  FOREIGN KEY(domain_id) REFERENCES domains(id)
+);
+
+CREATE TABLE IF NOT EXISTS reconcile_diff_keys (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  list_id INTEGER NOT NULL,
+  biz_day TEXT NOT NULL,
+  store_code TEXT NOT NULL,
+  diff_kind TEXT NOT NULL,
+  detail_line_count INTEGER NOT NULL DEFAULT 0,
+  detail_amount REAL NOT NULL DEFAULT 0,
+  summary_line_count INTEGER NOT NULL DEFAULT 0,
+  summary_amount REAL NOT NULL DEFAULT 0,
+  amount_delta REAL NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(list_id, biz_day, store_code),
+  FOREIGN KEY(list_id) REFERENCES reconcile_diff_lists(id)
+);
+
+-- 按键重算报告：外键挂差异清单 id，只覆盖清单内键。
+CREATE TABLE IF NOT EXISTS recompute_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  domain_id INTEGER NOT NULL,
+  report_id INTEGER NOT NULL,
+  diff_list_id INTEGER NOT NULL,
+  scope TEXT NOT NULL,
+  commit_mode TEXT NOT NULL,
+  status TEXT NOT NULL,
+  key_total INTEGER NOT NULL DEFAULT 0,
+  key_success INTEGER NOT NULL DEFAULT 0,
+  key_failed INTEGER NOT NULL DEFAULT 0,
+  message TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  finished_at TEXT,
+  FOREIGN KEY(domain_id) REFERENCES domains(id),
+  FOREIGN KEY(report_id) REFERENCES reconcile_reports(id),
+  FOREIGN KEY(diff_list_id) REFERENCES reconcile_diff_lists(id)
+);
+
+CREATE TABLE IF NOT EXISTS recompute_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id INTEGER NOT NULL,
+  diff_key_id INTEGER,
+  biz_day TEXT NOT NULL,
+  store_code TEXT NOT NULL,
+  status TEXT NOT NULL,
+  action TEXT NOT NULL DEFAULT '',
+  detail_line_count INTEGER NOT NULL DEFAULT 0,
+  detail_amount REAL NOT NULL DEFAULT 0,
+  before_existed INTEGER NOT NULL DEFAULT 0,
+  before_line_count INTEGER,
+  before_amount REAL,
+  after_line_count INTEGER,
+  after_amount REAL,
+  message TEXT NOT NULL DEFAULT '',
+  FOREIGN KEY(run_id) REFERENCES recompute_runs(id),
+  FOREIGN KEY(diff_key_id) REFERENCES reconcile_diff_keys(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_diff_keys_list ON reconcile_diff_keys(list_id);
+CREATE INDEX IF NOT EXISTS idx_recompute_runs_report ON recompute_runs(report_id);
+CREATE INDEX IF NOT EXISTS idx_recompute_items_run ON recompute_items(run_id);
 """
 
 
@@ -109,7 +184,7 @@ def _seed_domain(conn) -> None:
         ),
     )
     domain_id = int(cur.lastrowid)
-    path = FIXTURES_DIR / fixture
+    path = fixtures_dir() / fixture
     if not path.exists():
         # 仓库内相对路径兜底
         alt = Path(__file__).resolve().parents[2] / "fixtures" / fixture

@@ -292,6 +292,36 @@ select {
   color: var(--ink);
 }
 
+button.small {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+tr.selected td { background: #e6eef8; }
+
+.diff-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 12px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.run-block {
+  padding: 12px 0 18px;
+  border-top: 1px dashed var(--line);
+}
+.run-block:first-of-type { border-top: none; }
+.run-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
 .cards { display: contents; }
 .card { display: none; }
 

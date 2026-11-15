@@ -66,12 +66,12 @@ const meter = computed(() => {
       <div class="panel">
         <h3>最近层间对账</h3>
         <table v-if="data.最近对账.length">
-          <thead><tr><th>编号</th><th>状态</th><th>明细行数</th><th>汇总行数合计</th></tr></thead>
+          <thead><tr><th>编号</th><th>状态</th><th>明细行数</th><th>汇总行数合计</th><th>差异键数</th></tr></thead>
           <tbody>
             <tr v-for="r in data.最近对账" :key="r.编号">
               <td>{{ r.编号 }}</td>
               <td :class="r.状态 === '一致' ? 'ok' : 'warn'">{{ r.状态 }}</td>
-              <td>{{ r.明细行数 }}</td><td>{{ r.汇总行数合计 }}</td>
+              <td>{{ r.明细行数 }}</td><td>{{ r.汇总行数合计 }}</td><td>{{ r.差异键数 }}</td>
             </tr>
           </tbody>
         </table>
